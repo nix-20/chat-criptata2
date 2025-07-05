@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat Criptata</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; }
+    #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; }
+    #input { width: 80%; }
+    #send { width: 18%; }
+  </style>
+</head>
+<body>
+
+<!-- BLOCCO DI ACCESSO -->
+<div id="login-container">
+  <h3>Inserisci il codice di accesso</h3>
+  <input type="password" id="access-code" placeholder="Codice di accesso" />
+  <button onclick="checkAccessCode()">Entra</button>
+  <p id="error-msg" style="color:red; display:none;">Codice errato, riprova.</p>
+</div>
+
+<!-- BLOCCO CHAT -->
+<div id="chat-container" style="display:none;">
+  <h2>Chat Criptata</h2>
+  <div id="messages"></div>
+  <input id="input" type="text" placeholder="Scrivi un messaggio..." />
+  <button id="send">Invia</button>
+</div>
+
+<!-- Firebase -->
+<script type="module">
+  // ✅ CONFIGURAZIONE FIREBASE — SOSTITUISCI QUESTI VALORI CON I TUOI
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+ const firebaseConfig = {
+
+  apiKey: "AIzaSyBQuzzHtJbqHUYAUNdc3ryuhtwee1d7gb8",
+
+  authDomain: "chat-d6252.firebaseapp.com",
+
+  projectId: "chat-d6252",
+
+  storageBucket: "chat-d6252.firebasestorage.app",
+
+  messagingSenderId: "214691823804",
+
+  appId: "1:214691823804:web:489b7c7aa29e0339efd0b9"
+
+};
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const messagesRef = collection(db, "messages");
+
+  // Ricezione messaggi
+  const q = query(messagesRef, orderBy("timestamp"));
+  onSnapshot(q, (snapshot) => {
+    const messagesDiv = document.getElementById("messages");
+    messagesDiv.innerHTML = "";
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      messagesDiv.innerHTML += `<div><b>${data.text}</b></div>`;
+    });
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  });
+
+  // Invio messaggi
+  document.getElementById("send").addEventListener("click", async () => {
+    const input = document.getElementById("input");
+    if (input.value.trim() !== "") {
+      await addDoc(messagesRef, {
+        text: input.value.trim(),
+        timestamp: serverTimestamp()
+      });
+      input.value = "";
+    }
+  });
+</script>
+
+<!-- Script per il codice d’accesso -->
+<script>
+  const PASSWORD = "8907654567";
+
+  function checkAccessCode() {
+    const input = document.getElementById("access-code").value;
+    if(input === PASSWORD) {
+      document.getElementById("login-container").style.display = "none";
+      document.getElementById("chat-container").style.display = "block";
+    } else {
+      const errorMsg = document.getElementById("error-msg");
+      errorMsg.style.display = "block";
+    }
+  }
+</script>
+
+</body>
+</html>
