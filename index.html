@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chat Criptata con Accesso</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; }
+  #login, #chat { display: none; }
+  #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; }
+  #input { width: 80%; }
+  #send { width: 18%; }
+</style>
+</head>
+<body>
+
+<h2>Chat Criptata con Accesso</h2>
+
+<div id="login">
+  <label for="accessCode">Inserisci il codice di accesso:</label><br />
+  <input id="accessCode" type="password" autocomplete="off" />
+  <button id="loginBtn">Entra</button>
+</div>
+
+<div id="chat">
+  <label for="key">Inserisci la chiave segreta per la chat:</label><br />
+  <input id="key" type="password" autocomplete="off" /><br /><br />
+
+  <div id="messages"></div>
+
+  <input id="input" type="text" placeholder="Scrivi un messaggio..." autocomplete="off" />
+  <button id="send">Invia</button>
+  <button id="logout">Esci</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+
+  apiKey: "AIzaSyBQuzzHtJbqHUYAUNdc3ryuhtwee1d7gb8",
+
+  authDomain: "chat-d6252.firebaseapp.com",
+
+  projectId: "chat-d6252",
+
+  storageBucket: "chat-d6252.firebasestorage.app",
+
+  messagingSenderId: "214691823804",
+
+  appId: "1:214691823804:web:489b7c7aa29e0339efd0b9"
+
+};
+
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // CODICE DI ACCESSO (modificalo come vuoi)
+  const CORRECT_ACCESS_CODE = "12345";
+
+  const loginDiv = document.getElementById("login");
+  const chatDiv = document.getElementById("chat");
+  const loginBtn = document.getElementById("loginBtn");
+  const accessCodeInput = document.getElementById("accessCode");
+  const logoutBtn = document.getElementById("logout");
+
+  function showLogin() {
+    loginDiv.style.display = "block";
+    chatDiv.style.display = "none";
+  }
+
+  function showChat() {
+    loginDiv.style.display = "none";
+    chatDiv.style.display = "block";
+  }
+
+  loginBtn.onclick = () => {
+    const code = accessCodeInput.value.trim();
+    if(code === CORRECT_ACCESS_CODE) {
+      showChat();
+      startChat();
+    } else {
+      alert("Codice di accesso errato!");
+    }
+  };
+
+  logoutBtn.onclick = () => {
+    location.reload();
+  };
+
+  async function getKey() {
+    const keyString = document.getElementById('key').value;
+    if (!keyString) throw new Error("Devi inserire la chiave segreta!");
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+      "raw",
+      enc.encode(keyString),
+      {name: "PBKDF2"},
+      false,
+      ["deriveKey"]
+    );
+    return window.crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: enc.encode("salt_chat_123"),
+        iterations: 100000,
+        hash: "SHA-256"
+      },
+      keyMaterial,
+      {name: "AES-GCM", length: 256},
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function encrypt(text) {
+    const key = await getKey();
+    const enc = new TextEncoder();
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await window.crypto.subtle.encrypt(
+      {name: "AES-GCM", iv: iv},
+      key,
+      enc.encode(text)
+    );
+    const buffer = new Uint8Array(iv.length + encrypted.byteLength);
+    buffer.set(iv, 0);
+    buffer.set(new Uint8Array(encrypted), iv.length);
+    return btoa(String.fromCharCode(...buffer));
+  }
+
+  async function decrypt(data) {
+    const key = await getKey();
+    const rawData = atob(data);
+    const buffer = Uint8Array.from(rawData, c => c.charCodeAt(0));
+    const iv = buffer.slice(0, 12);
+    const encrypted = buffer.slice(12);
+    const decrypted = await window.crypto.subtle.decrypt(
+      {name: "AES-GCM", iv: iv},
+      key,
+      encrypted
+    );
+    const dec = new TextDecoder();
+    return dec.decode(decrypted);
+  }
+
+  const messagesDiv = document.getElementById('messages');
+  const input = document.getElementById('input');
+  const sendBtn = document.getElementById('send');
+
+  function addMessage(text) {
+    const p = document.createElement('p');
+    p.textContent = text;
+    messagesDiv.appendChild(p);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
+  function startChat() {
+    db.collection('messages').orderBy('timestamp').onSnapshot(async snapshot => {
+      messagesDiv.innerHTML = '';
+      for (const doc of snapshot.docs) {
+        try {
+          const decrypted = await decrypt(doc.data().text);
+          addMessage(decrypted);
+        } catch {
+          addMessage("[Messaggio non decifrabile]");
+        }
+      }
+    });
+
+    sendBtn.onclick = async () => {
+      try {
+        const msg = input.value.trim();
+        if (!msg) return;
+        const encrypted = await encrypt(msg);
+        await db.collection('messages').add({
+          text: encrypted,
+          timestamp: Date.now()
+        });
+        input.value = '';
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+  }
+
+  // Mostra pagina login all'inizio
+  showLogin();
+
+</script>
+
+</body>
+</html>
